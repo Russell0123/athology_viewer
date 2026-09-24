@@ -4,8 +4,8 @@
   --fg: #e2e2e4;
   --accent: #c8c8cc;
   --paper: #fbfaf6;
-  --edge-light: #efece4;
-  --edge-dark: #bdb8ad;
+  --edge-light: #f6f3ec;
+  --edge-dark: #dcd7cc;
   --flip: 700ms;
   --pw: 300px;   /* 單頁寬（由 JS 計算） */
   --ph: 424px;   /* 單頁高 */
@@ -29,12 +29,14 @@ body {
 
 .topbar {
   flex: none;
-  display: flex; align-items: baseline; gap: 12px;
+  display: flex; align-items: flex-start; gap: 16px;
   padding: 12px 16px 0;
   min-height: 40px;
 }
 .topbar h1 { font-size: 16px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar .author { font-size: 13px; opacity: .6; white-space: nowrap; }
+.titles { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.credit { margin-left: auto; flex: none; font-size: 12px; line-height: 22px; color: var(--fg); opacity: .4; white-space: nowrap; }
 
 /* ---------- 閱讀區 ---------- */
 #stage {
@@ -137,7 +139,6 @@ body {
   top: calc(var(--tl) * .35); bottom: calc(var(--tl) * -.35);
   right: 100%; width: var(--tl);
   background: repeating-linear-gradient(90deg, var(--edge-light) 0 1px, var(--edge-dark) 1px 2px);
-  box-shadow: -4px 8px 14px rgba(0,0,0,.3);
 }
 .left .edge-bottom {
   left: calc(var(--tl) * -1); right: 0;
@@ -148,7 +149,6 @@ body {
   top: calc(var(--tr) * .35); bottom: calc(var(--tr) * -.35);
   left: 100%; width: var(--tr);
   background: repeating-linear-gradient(90deg, var(--edge-light) 0 1px, var(--edge-dark) 1px 2px);
-  box-shadow: 4px 8px 14px rgba(0,0,0,.3);
 }
 .right .edge-bottom {
   right: calc(var(--tr) * -1); left: 0;
@@ -238,8 +238,10 @@ body {
   .btn { padding: 0 8px; }
   .sep { margin: 0 2px; }
   /* 手機：作品名和作者分成兩行 */
-  .topbar { flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 8px; min-height: 0; }
+  .topbar { gap: 10px; padding-top: 8px; min-height: 0; }
+  .titles { flex-direction: column; align-items: flex-start; gap: 2px; }
   .topbar h1, .topbar .author { max-width: 100%; white-space: normal; }
+  .credit { font-size: 11px; }
   .zoom-group { display: none; }  /* 手機用兩指縮放，工具列放不下 */
 }
 

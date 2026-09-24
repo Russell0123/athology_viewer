@@ -91,7 +91,9 @@ function fill(el, v) {
 }
 
 function setEdges(leftCount, rightCount) {
-  const t = (c) => (c > 0 ? Math.min(14, 1.5 + c * 0.6) : 0) + 'px';
+  // 頁疊厚度：翻開時隨兩側頁數變化（最多 5px），闔上時只留一條細邊
+  const closed = leftCount < 0 || rightCount < 0;
+  const t = (c) => (c <= 0 ? 0 : closed ? 2 : Math.min(5, 1 + c * 0.35)) + 'px';
   book.style.setProperty('--tl', t(leftCount));
   book.style.setProperty('--tr', t(rightCount));
 }
