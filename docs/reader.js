@@ -4,28 +4,27 @@ const cfg = Object.assign({
 }, window.BOOK || {});
 
 const $ = (s) => document.querySelector(s);
-const stage = $('#stage'), book = $('#book'), single = $('#single'), view = $('#view');
+const stage = $('#stage'), book = $('#book'), view = $('#view');
 const pageL = $('#pageL'), pageR = $('#pageR'), flipper = $('#flipper');
 const faceF = flipper.querySelector('.front'), faceB = flipper.querySelector('.back');
 const slider = $('#slider'), label = $('#label');
 const btnNext = $('#btnNext'), btnPrev = $('#btnPrev'), btnClose = $('#btnClose');
-const btnMode = $('#btnMode'), btnTilt = $('#btnTilt'), btnFull = $('#btnFull');
+const btnTilt = $('#btnTilt'), btnFull = $('#btnFull');
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const FLIP = reduced ? 0 : cfg.flipMs;
-const SLIDE = reduced ? 0 : 260;
 document.documentElement.style.setProperty('--flip', FLIP + 'ms');
 
 /* ---------- 頁面資料 ----------
  * vpages：實際排版用的「虛擬頁」。右翻書：偶數索引在左頁、奇數索引在右頁。
  * 每一張紙（leaf）i：正面 = vpages[2i]（在左側時看得到），背面 = vpages[2i+1]。
- * 雙頁模式的狀態 k = 已經翻到右邊的紙張數；k=0 闔上（封面），k=L 闔上（封底）。
+ * 狀態 k = 已經翻到右邊的紙張數；k=0 闔上（封面），k=L 闔上（封底）。
  */
 let files = [], version = '', numPages = 0, ratio = 0.707;
-let vpages = [], L = 0, sList = [];
-let mode = 'double', tilt = cfg.tilt;
-let k = 0, s = 0, lastOpenK = 1, lastOpenS = 1;
-let busy = false, busyTarget = 0, queued = null, flipTimer = 0;
+let vpages = [], L = 0;
+let tilt = cfg.tilt;
+let k = 0, lastOpenK = 1;
+let busy = false, busyTarget = 0, queued = null;
 
 function buildPages() {
   vpages = [];
@@ -36,7 +35,6 @@ function buildPages() {
     else vpages.push({ kind: 'blank' });
   }
   L = vpages.length / 2;
-  sList = vpages.map((p, i) => (p.kind === 'blank' && i !== vpages.length - 1 ? -1 : i)).filter((i) => i >= 0);
 }
 
 /* ---------- 圖片預先載入 ---------- */
@@ -53,25 +51,15 @@ function preload(nums) {
   }
 }
 function prefetch() {
+  const c = busy ? busyTarget : k;
   const vs = [];
-  if (mode === 'double') {
-    const c = busy ? busyTarget : k;
-    for (const d of [0, 1, -1, 2, 3, -2]) vs.push(2 * (c + d) - 1, 2 * (c + d));
-  } else {
-    for (const d of [0, 1, -1, 2, 3, 4, -2]) vs.push(sList[s + d]);
-  }
+  for (const d of [0, 1, -1, 2, 3, -2]) vs.push(2 * (c + d) - 1, 2 * (c + d));
   preload(vs.map((v) => vpages[v]).filter((p) => p && p.kind === 'img').map((p) => p.n));
 }
 
 /* ---------- 頁面元素 ---------- */
 const SHEET = '<div class="sheet"><div class="content"></div><div class="shade"></div><div class="flipshade"></div></div>';
 const EDGES = '<div class="edge-side"></div><div class="edge-bottom"></div>';
-function makePage(cls) {
-  const el = document.createElement('div');
-  el.className = 'page ' + cls;
-  el.innerHTML = EDGES + SHEET;
-  return el;
-}
 pageL.innerHTML = pageR.innerHTML = EDGES + SHEET;
 faceF.innerHTML = faceB.innerHTML = SHEET;
 
@@ -112,8 +100,8 @@ function setBookPos(t) {
   book.classList.toggle('at-back', t === L);
 }
 
-/* ---------- 雙頁（書本）模式 ---------- */
-function renderDouble() {
+/* ---------- 翻頁 ---------- */
+function render() {
   fill(pageL, k < L ? 2 * k : null);
   fill(pageR, k > 0 ? 2 * k - 1 : null);
   setEdges(L - k - 1, k - 1);
@@ -121,11 +109,11 @@ function renderDouble() {
   flipper.classList.remove('on', 'fwd', 'bwd');
 }
 
-function goDouble(target) {
+function go(target) {
   target = Math.max(0, Math.min(L, target));
   if (busy) { queued = target; return; }
   if (target === k) return;
-  if (!FLIP) { k = target; renderDouble(); afterMove(); return; }
+  if (!FLIP) { k = target; render(); afterMove(); return; }
 
   busy = true; busyTarget = target;
   const fwd = target > k;
@@ -153,96 +141,25 @@ function goDouble(target) {
   prefetch();
   updateUI(target);
 
-  flipTimer = setTimeout(() => {
+  setTimeout(() => {
     k = target; busy = false;
-    renderDouble();
+    render();
     afterMove();
-    if (queued != null) { const q = queued; queued = null; goDouble(q); }
+    if (queued != null) { const q = queued; queued = null; go(q); }
   }, FLIP + 30);
 }
 
-/* ---------- 單頁模式 ---------- */
-function renderSingle(dir = 0) {
-  const v = sList[s];
-  const el = makePage(v % 2 === 0 ? 'left' : 'right');
-  fill(el, v);
-  const olds = [...single.children].filter((c) => !c.classList.contains('leaving'));
-  single.appendChild(el);
-  olds.forEach((old) => {
-    if (!dir || !SLIDE) { old.remove(); return; }
-    old.classList.add('leaving');
-    // 右翻書：往後讀時舊頁往右滑出，新頁從左邊進來
-    old.animate([{ transform: 'none', opacity: 1 }, { transform: `translateX(${dir > 0 ? 35 : -35}%)`, opacity: 0 }],
-      { duration: SLIDE, easing: 'ease-in', fill: 'forwards' });
-    setTimeout(() => old.remove(), SLIDE + 30);
-  });
-  if (dir && SLIDE) {
-    el.animate([{ transform: `translateX(${dir > 0 ? -35 : 35}%)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
-      { duration: SLIDE, easing: 'ease-out' });
-  }
-}
-function goSingle(target) {
-  target = Math.max(0, Math.min(sList.length - 1, target));
-  if (target === s) return;
-  const dir = Math.sign(target - s);
-  s = target;
-  renderSingle(dir);
-  afterMove();
-}
-
-/* ---------- 共用操作 ---------- */
 const baseK = () => (busy ? (queued ?? busyTarget) : k);
-function step(d) {
-  if (mode === 'double') goDouble(baseK() + d);
-  else goSingle(s + d);
-}
-const next = () => step(1);
-const prev = () => step(-1);
-function goFirst() { mode === 'double' ? goDouble(0) : goSingle(0); }
-function goLast() { mode === 'double' ? goDouble(L) : goSingle(sList.length - 1); }
+const next = () => go(baseK() + 1);
+const prev = () => go(baseK() - 1);
+const goFirst = () => go(0);
+const goLast = () => go(L);
 
-function isClosedAt(pos) {
-  if (mode === 'double') return pos === 0 || pos === L;
-  const v = sList[pos];
-  return v === 0 || v === vpages.length - 1;
-}
 function toggleClose() {
-  if (mode === 'double') {
-    const c = baseK();
-    if (c === 0) goDouble(lastOpenK > 0 && lastOpenK < L ? lastOpenK : 1);
-    else if (c === L) goDouble(lastOpenK > 0 && lastOpenK < L ? lastOpenK : L - 1);
-    else { lastOpenK = c; goDouble(0); }
-  } else {
-    if (isClosedAt(s)) goSingle(lastOpenS > 0 && lastOpenS < sList.length - 1 ? lastOpenS : 1);
-    else { lastOpenS = s; goSingle(0); }
-  }
-}
-
-// 目前「焦點頁」（切換單頁／跨頁時用來對應位置）
-function focusV() {
-  if (mode === 'single') return sList[s];
-  return k === 0 ? 0 : k === L ? 2 * L - 1 : 2 * k - 1;
-}
-function applyMode(m) {
-  if (busy) { clearTimeout(flipTimer); k = queued ?? busyTarget; busy = false; queued = null; }
-  const v = focusV();
-  mode = m;
-  if (m === 'double') {
-    k = Math.ceil(v / 2);
-    single.hidden = true; view.hidden = false;
-    single.textContent = '';
-    book.classList.add('no-anim');
-    renderDouble();
-    requestAnimationFrame(() => requestAnimationFrame(() => book.classList.remove('no-anim')));
-  } else {
-    const i = sList.findIndex((x) => x >= v);
-    s = i < 0 ? sList.length - 1 : i;
-    view.hidden = true; single.hidden = false;
-    single.textContent = '';
-    renderSingle(0);
-  }
-  layout();
-  afterMove();
+  const c = baseK();
+  if (c === 0) go(lastOpenK > 0 && lastOpenK < L ? lastOpenK : 1);
+  else if (c === L) go(lastOpenK > 0 && lastOpenK < L ? lastOpenK : L - 1);
+  else { lastOpenK = c; go(0); }
 }
 
 function pageName(v) {
@@ -253,47 +170,36 @@ function pageName(v) {
   return p.kind === 'img' ? String(p.n) : '';
 }
 function labelFor(pos) {
-  if (mode === 'double') {
-    if (pos === 0) return '封面';
-    if (pos === L) return '封底';
-    const names = [pageName(2 * pos - 1), pageName(2 * pos)].filter(Boolean);
-    return names.join('–') + ` / ${numPages}`;
-  }
-  const name = pageName(sList[pos]);
-  return /^\d+$/.test(name) ? `${name} / ${numPages}` : name;
+  if (pos === 0) return '封面';
+  if (pos === L) return '封底';
+  const names = [pageName(2 * pos - 1), pageName(2 * pos)].filter(Boolean);
+  return names.join('–') + ` / ${numPages}`;
 }
 
 const ICON = {
   open: '<svg viewBox="0 0 24 24"><path d="M2 5.5C4.5 4 8 4 12 6c4-2 7.5-2 10-.5V19c-2.5-1.5-6-1.5-10 .5-4-2-7.5-2-10-.5z"/><path d="M12 6v13.5"/></svg>',
   closed: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M15 3v18"/></svg>',
-  single: '<svg viewBox="0 0 24 24"><rect x="7" y="4" width="10" height="16" rx="1"/></svg>',
-  double: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="9" height="14" rx="1"/><rect x="12" y="5" width="9" height="14" rx="1"/></svg>',
   tilt: '<svg viewBox="0 0 24 24"><path d="M6 6h12l3 13H3z"/><path d="M12 6v13"/></svg>',
   flat: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M12 5v14"/></svg>',
 };
 
-function updateUI(pos = mode === 'double' ? k : s) {
-  const max = mode === 'double' ? L : sList.length - 1;
-  slider.max = max;
+function updateUI(pos = k) {
+  slider.max = L;
   slider.value = pos;
   label.textContent = labelFor(pos);
-  btnNext.disabled = pos >= max;
+  btnNext.disabled = pos >= L;
   btnPrev.disabled = pos <= 0;
-  $('.hint-next').classList.toggle('off', pos >= max);
+  $('.hint-next').classList.toggle('off', pos >= L);
   $('.hint-prev').classList.toggle('off', pos <= 0);
-  const closed = isClosedAt(pos);
+  const closed = pos === 0 || pos === L;
   btnClose.innerHTML = closed ? ICON.open + '<span class="txt">打開</span>' : ICON.closed + '<span class="txt">闔上</span>';
   btnClose.title = closed ? '打開書本' : '闔上書本';
-  btnMode.innerHTML = mode === 'double' ? ICON.single + '<span class="txt">單頁</span>' : ICON.double + '<span class="txt">跨頁</span>';
-  btnMode.title = mode === 'double' ? '切換成單頁顯示' : '切換成跨頁（書本）顯示';
-  btnTilt.hidden = mode !== 'double';
   btnTilt.innerHTML = tilt ? ICON.flat + '<span class="txt">平面</span>' : ICON.tilt + '<span class="txt">傾斜</span>';
   btnTilt.title = tilt ? '切換成正面平視' : '切換成傾斜視角';
 }
 
 function afterMove() {
-  if (mode === 'double' && k > 0 && k < L) lastOpenK = k;
-  if (mode === 'single' && !isClosedAt(s)) lastOpenS = s;
+  if (k > 0 && k < L) lastOpenK = k;
   updateUI();
   prefetch();
 }
@@ -303,15 +209,9 @@ function layout() {
   view.classList.toggle('tilted', tilt);
   const w = stage.clientWidth, h = stage.clientHeight;
   const pad = Math.max(16, Math.min(w, h) * 0.04);
-  const aw = w - pad * 2, ah = h - pad * 2 - 8;
-  let pw;
-  if (mode === 'double') {
-    // 傾斜時書的下緣會變寬、整體高度變矮
-    pw = tilt ? Math.min((aw - 28) / 2 / 1.12, (ah / 0.95) * ratio) : Math.min((aw - 28) / 2, ah * ratio);
-  } else {
-    pw = Math.min(aw, ah * ratio);
-  }
-  pw = Math.max(60, pw);
+  const aw = w - pad * 2 - 28, ah = h - pad * 2 - 8;
+  // 傾斜時書的下緣會變寬、整體高度變矮
+  const pw = Math.max(60, tilt ? Math.min(aw / 2 / 1.12, (ah / 0.95) * ratio) : Math.min(aw / 2, ah * ratio));
   const root = document.documentElement.style;
   root.setProperty('--pw', pw.toFixed(1) + 'px');
   root.setProperty('--ph', (pw / ratio).toFixed(1) + 'px');
@@ -361,7 +261,6 @@ addEventListener('resize', () => {
 btnNext.onclick = next;
 btnPrev.onclick = prev;
 btnClose.onclick = toggleClose;
-btnMode.onclick = () => { resetZoom(); applyMode(mode === 'double' ? 'single' : 'double'); };
 btnTilt.onclick = () => { tilt = !tilt; resetZoom(); layout(); updateUI(); };
 $('#btnZoomIn').onclick = () => zoomCenter(1.25);
 $('#btnZoomOut').onclick = () => zoomCenter(1 / 1.25);
@@ -375,7 +274,7 @@ if (document.fullscreenEnabled) {
 slider.addEventListener('input', () => { label.textContent = labelFor(+slider.value); });
 slider.addEventListener('change', () => {
   const v = +slider.value;
-  mode === 'double' ? goDouble(v) : goSingle(v);
+  go(v);
 });
 
 addEventListener('keydown', (e) => {
@@ -392,11 +291,9 @@ addEventListener('keydown', (e) => {
 // 點一下：左半邊 = 下一頁，右半邊 = 上一頁（右翻書）
 function tap(clientX) {
   if (!vpages.length) return;
-  if (mode === 'double') {
-    const c = baseK();
-    if (c === 0) return next();
-    if (c === L) return prev();
-  }
+  const c = baseK();
+  if (c === 0) return next();
+  if (c === L) return prev();
   const r = stage.getBoundingClientRect();
   clientX < r.left + r.width / 2 ? next() : prev();
 }
@@ -542,7 +439,7 @@ async function start() {
   if (startV > 0) k = Math.ceil(startV / 2);
 
   book.classList.add('no-anim');
-  renderDouble();
+  render();
   layout();
   resetZoom();
   afterMove();

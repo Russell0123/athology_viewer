@@ -181,9 +181,6 @@ body {
 @keyframes shadeOut { 0% { opacity: 0; } 50%, 100% { opacity: .6; } }
 @keyframes shadeIn  { 0%, 50% { opacity: .6; } 100% { opacity: 0; } }
 
-/* ---------- 單頁模式 ---------- */
-.single { display: grid; place-items: center; }
-.single .page { position: relative; grid-area: 1 / 1; }
 
 /* ---------- 左右翻頁提示 ---------- */
 .hint {
@@ -240,7 +237,9 @@ body {
   .btn .txt { display: none; }
   .btn { padding: 0 8px; }
   .sep { margin: 0 2px; }
-  .topbar { padding-top: 8px; min-height: 32px; }
+  /* 手機：作品名和作者分成兩行 */
+  .topbar { flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 8px; min-height: 0; }
+  .topbar h1, .topbar .author { max-width: 100%; white-space: normal; }
   .zoom-group { display: none; }  /* 手機用兩指縮放，工具列放不下 */
 }
 
