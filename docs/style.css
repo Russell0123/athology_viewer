@@ -1,0 +1,248 @@
+:root {
+  --bg: #2c2c2e;
+  --bar: #1d1d1f;
+  --fg: #e2e2e4;
+  --accent: #c8c8cc;
+  --paper: #fbfaf6;
+  --edge-light: #efece4;
+  --edge-dark: #bdb8ad;
+  --flip: 700ms;
+  --pw: 300px;   /* 單頁寬（由 JS 計算） */
+  --ph: 424px;   /* 單頁高 */
+  --tl: 0px;     /* 左側頁疊厚度 */
+  --tr: 0px;     /* 右側頁疊厚度 */
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+.topbar {
+  flex: none;
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 12px 16px 0;
+  min-height: 40px;
+}
+.topbar h1 { font-size: 16px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .author { font-size: 13px; opacity: .6; white-space: nowrap; }
+
+/* ---------- 閱讀區 ---------- */
+#stage {
+  flex: 1; min-height: 0;
+  position: relative; overflow: hidden;
+  display: grid; place-items: center;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none;   /* 兩指縮放由程式處理 */
+  cursor: pointer;
+}
+#stage.zoomed { cursor: grab; }
+#stage.panning { cursor: grabbing; }
+
+/* 縮放層：放大後可以拖曳移動 */
+.zoomer {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  transform-origin: 0 0;
+}
+.zoomer > * { grid-area: 1 / 1; }
+.zoomer.smooth { transition: transform .2s ease-out; }
+
+/* 傾斜視角：整本書當成一張平面往後倒，只是一個 CSS transform，不會卡 */
+.view { transition: transform .5s ease; }
+.view.tilted {
+  transform: translateY(calc(var(--ph) * -.04)) perspective(calc(var(--ph) * 2.2)) rotateX(25deg);
+}
+
+.book {
+  position: relative;
+  width: calc(var(--pw) * 2);
+  height: var(--ph);
+  perspective: calc(var(--pw) * 5);
+  transition: transform var(--flip) cubic-bezier(.45, .05, .3, 1);
+}
+/* 闔上時只有半邊有書，把書移回畫面中央 */
+.book.at-front { transform: translateX(calc(var(--pw) * .5)); }
+.book.at-back  { transform: translateX(calc(var(--pw) * -.5)); }
+.book.no-anim, .book.no-anim * { transition: none !important; }
+
+.page { position: absolute; top: 0; width: var(--pw); height: var(--ph); }
+.page.left  { left: 0; }
+.page.right { left: var(--pw); }
+.page.empty { visibility: hidden; }
+
+.sheet {
+  position: absolute; inset: 0;
+  background: var(--paper);
+  overflow: hidden;
+}
+.page .sheet { box-shadow: 0 12px 28px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .25); }
+
+.content { position: absolute; inset: 0; }
+.content img {
+  display: block; width: 100%; height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+.content.loading img { opacity: 0; }
+.content.loading::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 28px; height: 28px; margin: -14px 0 0 -14px;
+  border: 3px solid rgba(0, 0, 0, .12); border-top-color: rgba(0, 0, 0, .45);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+
+/* 自動產生的標題封面 */
+.content.title-cover {
+  display: grid; place-items: center; text-align: center;
+  background: linear-gradient(160deg, #4a4a4e, #2a2a2d);
+  color: #f1f1fa;
+  padding: 12%;
+}
+.title-cover h2 { margin: 0 0 .6em; font-size: calc(var(--pw) * .09); line-height: 1.3; }
+.title-cover p  { margin: 0; font-size: calc(var(--pw) * .045); opacity: .75; }
+
+/* 裝訂處的紙張弧度陰影 */
+.shade, .flipshade { position: absolute; inset: 0; pointer-events: none; }
+.left .shade {
+  background: linear-gradient(to left,
+    rgba(0,0,0,.30) 0%, rgba(0,0,0,.12) 2.5%, rgba(0,0,0,.04) 6%,
+    rgba(255,255,255,.07) 9%, rgba(255,255,255,0) 16%,
+    rgba(0,0,0,0) 96%, rgba(0,0,0,.05) 100%);
+}
+.right .shade {
+  background: linear-gradient(to right,
+    rgba(0,0,0,.30) 0%, rgba(0,0,0,.12) 2.5%, rgba(0,0,0,.04) 6%,
+    rgba(255,255,255,.07) 9%, rgba(255,255,255,0) 16%,
+    rgba(0,0,0,0) 96%, rgba(0,0,0,.05) 100%);
+}
+/* 封面、封底只有淺淺的摺痕 */
+.left.is-cover .shade  { background: linear-gradient(to left,  rgba(0,0,0,.18) 0, rgba(0,0,0,0) 1.2%, rgba(255,255,255,.12) 2%, rgba(255,255,255,0) 4%); }
+.right.is-cover .shade { background: linear-gradient(to right, rgba(0,0,0,.18) 0, rgba(0,0,0,0) 1.2%, rgba(255,255,255,.12) 2%, rgba(255,255,255,0) 4%); }
+
+/* 頁疊厚度（外側與底部） */
+.edge-side, .edge-bottom { position: absolute; pointer-events: none; }
+.left .edge-side {
+  top: calc(var(--tl) * .35); bottom: calc(var(--tl) * -.35);
+  right: 100%; width: var(--tl);
+  background: repeating-linear-gradient(90deg, var(--edge-light) 0 1px, var(--edge-dark) 1px 2px);
+  box-shadow: -4px 8px 14px rgba(0,0,0,.3);
+}
+.left .edge-bottom {
+  left: calc(var(--tl) * -1); right: 0;
+  top: 100%; height: calc(var(--tl) * .35);
+  background: repeating-linear-gradient(180deg, var(--edge-light) 0 1px, var(--edge-dark) 1px 2px);
+}
+.right .edge-side {
+  top: calc(var(--tr) * .35); bottom: calc(var(--tr) * -.35);
+  left: 100%; width: var(--tr);
+  background: repeating-linear-gradient(90deg, var(--edge-light) 0 1px, var(--edge-dark) 1px 2px);
+  box-shadow: 4px 8px 14px rgba(0,0,0,.3);
+}
+.right .edge-bottom {
+  right: calc(var(--tr) * -1); left: 0;
+  top: 100%; height: calc(var(--tr) * .35);
+  background: repeating-linear-gradient(180deg, var(--edge-light) 0 1px, var(--edge-dark) 1px 2px);
+}
+
+/* ---------- 翻頁中的那一張紙 ---------- */
+.flipper {
+  position: absolute; left: 0; top: 0;
+  width: var(--pw); height: var(--ph);
+  transform-origin: right center;
+  transform-style: preserve-3d;
+  transition: transform var(--flip) cubic-bezier(.45, .05, .3, 1);
+  display: none;
+}
+.flipper.on { display: block; }
+.face {
+  position: absolute; inset: 0;
+  backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.face.back { transform: rotateY(180deg); }
+.face.empty .sheet { background: var(--paper); }
+.face .sheet { box-shadow: 0 0 18px rgba(0,0,0,.25); }
+
+.left .flipshade  { background: linear-gradient(to left,  rgba(0,0,0,.55), rgba(0,0,0,.12)); opacity: 0; }
+.right .flipshade { background: linear-gradient(to right, rgba(0,0,0,.55), rgba(0,0,0,.12)); opacity: 0; }
+.flipper.fwd .front .flipshade, .flipper.bwd .back .flipshade { animation: shadeOut var(--flip) linear both; }
+.flipper.fwd .back .flipshade,  .flipper.bwd .front .flipshade { animation: shadeIn  var(--flip) linear both; }
+@keyframes shadeOut { 0% { opacity: 0; } 50%, 100% { opacity: .6; } }
+@keyframes shadeIn  { 0%, 50% { opacity: .6; } 100% { opacity: 0; } }
+
+/* ---------- 單頁模式 ---------- */
+.single { display: grid; place-items: center; }
+.single .page { position: relative; grid-area: 1 / 1; }
+
+/* ---------- 左右翻頁提示 ---------- */
+.hint {
+  position: absolute; top: 50%; width: 44px; height: 44px; margin-top: -22px;
+  display: grid; place-items: center;
+  border-radius: 50%; background: rgba(0,0,0,.28);
+  opacity: 0; transition: opacity .2s; pointer-events: none;
+}
+.hint svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hint-next { left: 12px; }
+.hint-prev { right: 12px; }
+@media (hover: hover) { #stage:hover .hint:not(.off) { opacity: .7; } }
+
+/* ---------- 載入 ---------- */
+.loading-overlay {
+  position: absolute; inset: 0;
+  display: grid; place-content: center; justify-items: center; gap: 14px;
+  background: var(--bg); text-align: center; padding: 16px;
+}
+.loading-overlay p { margin: 0; font-size: 14px; opacity: .8; line-height: 1.7; }
+.spinner {
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.15); border-top-color: var(--accent);
+  animation: spin .8s linear infinite;
+}
+.loading-overlay.error .spinner { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- 工具列 ---------- */
+.toolbar {
+  flex: none;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--bar);
+}
+.btn {
+  appearance: none; border: 0; background: transparent; color: inherit;
+  height: 40px; min-width: 40px; padding: 0 10px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { background: rgba(255,255,255,.08); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btn:disabled { opacity: .3; cursor: default; background: transparent; }
+.btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); margin: 0 6px; }
+.pager { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 4px; }
+.pager input { width: clamp(90px, 26vw, 320px); margin: 0; accent-color: var(--accent); cursor: pointer; }
+.zoom-group { display: flex; align-items: center; }
+.zoom-level { min-width: 56px; padding: 0 4px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.label { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .85; min-width: 7em; text-align: center; }
+
+@media (max-width: 600px) {
+  .btn .txt { display: none; }
+  .btn { padding: 0 8px; }
+  .sep { margin: 0 2px; }
+  .topbar { padding-top: 8px; min-height: 32px; }
+  .zoom-group { display: none; }  /* 手機用兩指縮放，工具列放不下 */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --flip: 0ms; }
+}

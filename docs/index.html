@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>春夏秋冬野貓觀察日記</title>
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <h1 id="title"></h1>
+    <span id="author" class="author"></span>
+  </header>
+
+  <main id="stage" aria-label="閱讀區">
+    <div id="zoomer" class="zoomer">
+    <div id="view" class="view">
+    <div id="book" class="book">
+      <div id="pageL" class="page left"></div>
+      <div id="pageR" class="page right"></div>
+      <div id="flipper" class="flipper">
+        <div class="face front left"></div>
+        <div class="face back right"></div>
+      </div>
+    </div>
+    </div>
+    <div id="single" class="single" hidden></div>
+    </div>
+
+    <div class="hint hint-next" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></div>
+    <div class="hint hint-prev" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>
+
+    <div id="loading" class="loading-overlay">
+      <div class="spinner"></div>
+      <p id="loadingText">載入中…</p>
+    </div>
+  </main>
+
+  <nav class="toolbar" aria-label="翻頁工具列">
+    <button id="btnClose" class="btn" type="button"></button>
+    <span class="sep"></span>
+    <button id="btnNext" class="btn" type="button" title="下一頁（←）" aria-label="下一頁">
+      <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+    </button>
+    <div class="pager">
+      <input id="slider" type="range" dir="rtl" min="0" max="1" value="0" aria-label="頁數">
+      <span id="label" class="label"></span>
+    </div>
+    <button id="btnPrev" class="btn" type="button" title="上一頁（→）" aria-label="上一頁">
+      <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <span class="sep"></span>
+    <button id="btnMode" class="btn" type="button"></button>
+    <button id="btnTilt" class="btn" type="button"></button>
+    <span class="sep zoom-group"></span>
+    <div class="zoom-group">
+      <button id="btnZoomOut" class="btn" type="button" title="縮小（-）" aria-label="縮小">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M16.5 16.5L21 21"/></svg>
+      </button>
+      <button id="btnZoomReset" class="btn zoom-level" type="button" title="回到原始大小（0）">100%</button>
+      <button id="btnZoomIn" class="btn" type="button" title="放大（+）" aria-label="放大">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M16.5 16.5L21 21"/></svg>
+      </button>
+    </div>
+    <button id="btnFull" class="btn" type="button" title="全螢幕（F）" aria-label="全螢幕">
+      <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+  </nav>
+</div>
+<script type="module" src="reader.js"></script>
+</body>
+</html>
