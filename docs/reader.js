@@ -389,18 +389,17 @@ addEventListener('keydown', (e) => {
   if (fn) { e.preventDefault(); fn(); }
 });
 
-// 點左半邊 = 下一頁，右半邊 = 上一頁（右翻書）；放大時點擊不翻頁，方便拖曳看細節
-let suppressClick = 0;
-stage.addEventListener('click', (e) => {
-  if (!vpages.length || Date.now() < suppressClick || zoom.z > 1) return;
+// 點一下：左半邊 = 下一頁，右半邊 = 上一頁（右翻書）
+function tap(clientX) {
+  if (!vpages.length) return;
   if (mode === 'double') {
     const c = baseK();
     if (c === 0) return next();
     if (c === L) return prev();
   }
   const r = stage.getBoundingClientRect();
-  e.clientX < r.left + r.width / 2 ? next() : prev();
-});
+  clientX < r.left + r.width / 2 ? next() : prev();
+}
 
 // 左右滑動：往右滑 = 下一頁、往左滑 = 上一頁（右翻書）
 function swipe(dx, dy) {
@@ -408,45 +407,44 @@ function swipe(dx, dy) {
   dx > 0 ? next() : prev();
 }
 
-/* 手指／滑鼠：
- *   一指（或滑鼠）拖曳：沒放大時左右滑翻頁，放大時移動畫面
- *   兩指：捏合縮放 */
+/* 手指：
+ *   單指點擊／左右滑動 → 翻頁（放大時也一樣）
+ *   兩指 → 捏合縮放，同時拖曳移動畫面
+ * 滑鼠：
+ *   點擊 → 翻頁；拖曳 → 沒放大時翻頁，放大時移動畫面 */
 const ptrs = new Map();
 let gesture = null;
 const stagePt = (p) => { const r = stage.getBoundingClientRect(); return { x: p.x - r.left, y: p.y - r.top }; };
 const mid = (a, b) => stagePt({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-function beginDrag(p, noSwipe) {
-  gesture = { type: 'drag', x0: p.x, y0: p.y, zx: zoom.x, zy: zoom.y, moved: false, noSwipe };
-}
 stage.addEventListener('pointerdown', (e) => {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  if (e.target.closest('button, input')) return;
   try { stage.setPointerCapture(e.pointerId); } catch {}
   const p = { x: e.clientX, y: e.clientY };
   ptrs.set(e.pointerId, p);
-  if (ptrs.size === 1) beginDrag(p, false);
-  else if (ptrs.size === 2) {
+  if (ptrs.size === 1) {
+    gesture = { type: 'one', mouse: e.pointerType === 'mouse', x0: p.x, y0: p.y, zx: zoom.x, zy: zoom.y, moved: false };
+  } else if (ptrs.size === 2) {
     const [a, b] = [...ptrs.values()];
     const m = mid(a, b);
-    gesture = { type: 'pinch', d0: dist(a, b) || 1, z0: zoom.z, px: (m.x - zoom.x) / zoom.z, py: (m.y - zoom.y) / zoom.z };
+    gesture = { type: 'two', d0: dist(a, b) || 1, z0: zoom.z, px: (m.x - zoom.x) / zoom.z, py: (m.y - zoom.y) / zoom.z };
   }
 });
 stage.addEventListener('pointermove', (e) => {
   if (!ptrs.has(e.pointerId) || !gesture) return;
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-  if (gesture.type === 'drag') {
+  if (gesture.type === 'one') {
     const dx = e.clientX - gesture.x0, dy = e.clientY - gesture.y0;
-    if (Math.hypot(dx, dy) > 8) gesture.moved = true;
-    if (zoom.z > 1 && gesture.moved) {
+    if (Math.hypot(dx, dy) > 10) gesture.moved = true;
+    if (gesture.mouse && zoom.z > 1 && gesture.moved) {
       stage.classList.add('panning');
       setZoom(zoom.z, gesture.zx + dx, gesture.zy + dy);
     }
-  } else if (ptrs.size >= 2) {
+  } else if (gesture.type === 'two' && ptrs.size >= 2) {
     const [a, b] = [...ptrs.values()];
     const m = mid(a, b);
-    // 捏合時讓手指中間那一點的內容跟著手指走
+    // 兩指中間那一點的內容跟著手指走：捏合 = 縮放，一起移動 = 拖曳畫面
     const z = clampZ(gesture.z0 * dist(a, b) / gesture.d0);
     setZoom(z, m.x - gesture.px * z, m.y - gesture.py * z);
   }
@@ -456,20 +454,19 @@ function endPointer(e) {
   ptrs.delete(e.pointerId);
   stage.classList.remove('panning');
   if (!gesture) return;
-  if (gesture.type === 'pinch') {
-    suppressClick = Date.now() + 400;
-    // 放開一指後剩下的那一指可以繼續拖曳，但不會觸發翻頁
-    if (ptrs.size === 1) beginDrag([...ptrs.values()][0], true);
-    else gesture = null;
+  if (gesture.type === 'two') {
+    // 兩指操作結束後，要等手指全部離開才算結束，不會誤翻頁
+    if (ptrs.size === 0) gesture = null;
+    else gesture = { type: 'done' };
     return;
   }
-  if (ptrs.size === 0) {
-    if (gesture.moved) {
-      suppressClick = Date.now() + 400;
-      if (zoom.z === 1 && !gesture.noSwipe && e.type === 'pointerup') swipe(e.clientX - gesture.x0, e.clientY - gesture.y0);
-    }
-    gesture = null;
-  }
+  if (ptrs.size > 0) return;
+  const g = gesture;
+  gesture = null;
+  if (g.type !== 'one' || e.type !== 'pointerup') return;
+  const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
+  if (!g.moved) tap(e.clientX);
+  else if (!(g.mouse && zoom.z > 1)) swipe(dx, dy);
 }
 stage.addEventListener('pointerup', endPointer);
 stage.addEventListener('pointercancel', endPointer);
