@@ -21,6 +21,7 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;   /* 不讓瀏覽器整頁縮放 */
 }
 [hidden] { display: none !important; }
 

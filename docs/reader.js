@@ -420,6 +420,8 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 stage.addEventListener('pointerdown', (e) => {
   if (e.pointerType === 'mouse' && e.button !== 0) return;
+  // 新的一次操作（第一根手指落下）：清掉可能沒收到「放開」的舊手指紀錄
+  if (e.isPrimary) { ptrs.clear(); gesture = null; }
   try { stage.setPointerCapture(e.pointerId); } catch {}
   const p = { x: e.clientX, y: e.clientY };
   ptrs.set(e.pointerId, p);
@@ -468,8 +470,22 @@ function endPointer(e) {
   if (!g.moved) tap(e.clientX);
   else if (!(g.mouse && zoom.z > 1)) swipe(dx, dy);
 }
-stage.addEventListener('pointerup', endPointer);
-stage.addEventListener('pointercancel', endPointer);
+// 手指可能在閱讀區外放開（例如滑到工具列上），所以在整個視窗上監聽
+addEventListener('pointerup', endPointer);
+addEventListener('pointercancel', endPointer);
+stage.addEventListener('lostpointercapture', (e) => { if (ptrs.has(e.pointerId)) endPointer(e); });
+// 保險：所有手指都離開螢幕時，一定把狀態清乾淨
+function clearTouches(e) {
+  if (e.touches.length === 0 && [...ptrs.keys()].length) {
+    ptrs.clear();
+    gesture = null;
+    stage.classList.remove('panning');
+  }
+}
+addEventListener('touchend', clearTouches);
+addEventListener('touchcancel', clearTouches);
+// iPhone Safari：關掉瀏覽器自己的整頁縮放，避免和書本縮放打架
+document.addEventListener('gesturestart', (e) => e.preventDefault());
 
 // 滑鼠滾輪／觸控板
 let wheelAcc = 0, wheelLock = 0, wheelReset = 0;
