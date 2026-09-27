@@ -5,8 +5,7 @@ const cfg = Object.assign({
 
 const $ = (s) => document.querySelector(s);
 const stage = $('#stage'), book = $('#book'), view = $('#view');
-const pageL = $('#pageL'), pageR = $('#pageR'), flipper = $('#flipper');
-const faceF = flipper.querySelector('.front'), faceB = flipper.querySelector('.back');
+const pageL = $('#pageL'), pageR = $('#pageR');
 const slider = $('#slider'), label = $('#label');
 const btnNext = $('#btnNext'), btnPrev = $('#btnPrev'), btnClose = $('#btnClose');
 const btnTilt = $('#btnTilt'), btnFull = $('#btnFull');
@@ -61,7 +60,6 @@ function prefetch() {
 const SHEET = '<div class="sheet"><div class="content"></div><div class="shade"></div><div class="flipshade"></div></div>';
 const EDGES = '<div class="edge-side"></div><div class="edge-bottom"></div>';
 pageL.innerHTML = pageR.innerHTML = EDGES + SHEET;
-faceF.innerHTML = faceB.innerHTML = SHEET;
 
 function fill(el, v) {
   const content = el.querySelector('.content');
@@ -108,7 +106,18 @@ function render() {
   fill(pageR, k > 0 ? 2 * k - 1 : null);
   setEdges(L - k - 1, k - 1);
   setBookPos(k);
-  flipper.classList.remove('on', 'fwd', 'bwd');
+  book.querySelectorAll('.flipper').forEach((f) => f.remove());
+}
+
+const MAX_FLIPPING = 6;   // 一次翻很多頁時，最多畫出幾張正在翻的紙
+function makeFlipper(leaf) {
+  const f = document.createElement('div');
+  f.className = 'flipper';
+  f.innerHTML = `<div class="face front left">${SHEET}</div><div class="face back right">${SHEET}</div>`;
+  fill(f.querySelector('.front'), 2 * leaf);
+  fill(f.querySelector('.back'), 2 * leaf + 1);
+  book.appendChild(f);
+  return f;
 }
 
 function go(target) {
@@ -119,26 +128,48 @@ function go(target) {
 
   busy = true; busyTarget = target;
   const fwd = target > k;
-  // 翻動中的那張紙：往前翻時由左翻到右，往回翻時由右翻回左
+  // 要翻動的紙（依翻動順序）：往前翻時由左翻到右，往回翻時由右翻回左
+  const leaves = [];
+  if (fwd) for (let i = k; i < target; i++) leaves.push(i);
+  else for (let i = k - 1; i >= target; i--) leaves.push(i);
+  // 翻很多頁時，只挑幾張平均分布的紙來畫（第一張和最後一張一定是真正的頁面）
+  const n = leaves.length;
+  const shown = n <= MAX_FLIPPING ? leaves
+    : Array.from({ length: MAX_FLIPPING }, (_, i) => leaves[Math.round((i * (n - 1)) / (MAX_FLIPPING - 1))]);
+
+  // 底下不動的頁面直接換成翻完後會露出來的那一頁
   if (fwd) {
-    fill(faceF, 2 * k);
-    fill(faceB, 2 * target - 1);
     fill(pageL, target < L ? 2 * target : null);
     setEdges(L - target - 1, k - 1);
   } else {
-    fill(faceF, 2 * target);
-    fill(faceB, 2 * k - 1);
     fill(pageR, target > 0 ? 2 * target - 1 : null);
     setEdges(L - k - 1, target - 1);
   }
-  flipper.classList.remove('fwd', 'bwd');
-  flipper.style.transition = 'none';
-  flipper.style.transform = `translateZ(1px) rotateY(${fwd ? 0 : 180}deg)`;
-  flipper.classList.add('on');
-  void flipper.offsetWidth;
-  flipper.style.transition = '';
-  flipper.classList.add(fwd ? 'fwd' : 'bwd');
-  flipper.style.transform = `translateZ(1px) rotateY(${fwd ? 180 : 0}deg)`;
+
+  const multi = shown.length > 1;
+  const dur = multi ? Math.round(FLIP * 0.7) : FLIP;
+  const gap = multi ? Math.min(110, Math.round((FLIP * 0.9) / (shown.length - 1))) : 0;
+  const count = shown.length;
+  const flips = shown.map((leaf, i) => {
+    const f = makeFlipper(leaf);
+    f.style.setProperty('--flip', dur + 'ms');
+    f.style.zIndex = 10 + count - i;   // 還沒翻過去時：先翻的在上面
+    f.style.transition = 'none';
+    f.style.transform = `translateZ(1px) rotateY(${fwd ? 0 : 180}deg)`;
+    f.classList.add('on');
+    return f;
+  });
+  void book.offsetWidth;
+  flips.forEach((f, i) => {
+    setTimeout(() => {
+      f.style.transition = '';
+      if (multi) f.style.transitionTimingFunction = 'ease-in-out';
+      f.classList.add(fwd ? 'fwd' : 'bwd');
+      f.style.transform = `translateZ(1px) rotateY(${fwd ? 180 : 0}deg)`;
+      // 翻過中線後落到另一側：後翻的要疊在上面
+      if (multi) setTimeout(() => { f.style.zIndex = 20 + count + i; }, dur / 2);
+    }, i * gap);
+  });
   setBookPos(target);
   prefetch();
   updateUI(target);
@@ -148,7 +179,7 @@ function go(target) {
     render();
     afterMove();
     if (queued != null) { const q = queued; queued = null; go(q); }
-  }, FLIP + 30);
+  }, (count - 1) * gap + dur + 30);
 }
 
 const baseK = () => (busy ? (queued ?? busyTarget) : k);
