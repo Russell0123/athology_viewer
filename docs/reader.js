@@ -93,7 +93,7 @@ function fill(el, v) {
 function setEdges(leftCount, rightCount) {
   // 頁疊厚度：翻開時隨兩側頁數變化（最多 5px），闔上時只留一條細邊
   const closed = leftCount < 0 || rightCount < 0;
-  const t = (c) => (c <= 0 ? 0 : closed ? 2 : Math.min(5, 1 + c * 0.35)) + 'px';
+  const t = (c) => `calc(${c <= 0 ? 0 : closed ? 2 : Math.min(5, 1 + c * 0.35)}px * var(--s))`;
   book.style.setProperty('--tl', t(leftCount));
   book.style.setProperty('--tr', t(rightCount));
 }
@@ -214,9 +214,12 @@ function layout() {
   const aw = w - pad * 2 - 28, ah = h - pad * 2 - 8;
   // 傾斜時書的下緣會變寬、整體高度變矮
   const pw = Math.max(60, tilt ? Math.min(aw / 2 / 1.12, (ah / 0.95) * ratio) : Math.min(aw / 2, ah * ratio));
+  // 傾斜時先用兩倍大小繪製，再在傾斜的同時縮回原尺寸：瀏覽器有更多像素可用，畫質比較清楚
+  const S = tilt ? 2 : 1;
   const root = document.documentElement.style;
-  root.setProperty('--pw', pw.toFixed(1) + 'px');
-  root.setProperty('--ph', (pw / ratio).toFixed(1) + 'px');
+  root.setProperty('--s', S);
+  root.setProperty('--pw', (pw * S).toFixed(1) + 'px');
+  root.setProperty('--ph', (pw * S / ratio).toFixed(1) + 'px');
 }
 /* ---------- 縮放 ---------- */
 const zoomer = $('#zoomer');

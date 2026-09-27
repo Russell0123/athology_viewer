@@ -11,6 +11,7 @@
   --ph: 424px;   /* 單頁高 */
   --tl: 0px;     /* 左側頁疊厚度 */
   --tr: 0px;     /* 右側頁疊厚度 */
+  --s: 1;        /* 繪製倍率（傾斜時為 2） */
 }
 
 * { box-sizing: border-box; }
@@ -54,15 +55,17 @@ body {
 .zoomer {
   position: absolute; inset: 0;
   display: grid; place-items: center;
+  /* 格子固定為閱讀區大小，書比它大時（傾斜的兩倍繪製）也會置中 */
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   transform-origin: 0 0;
 }
 .zoomer > * { grid-area: 1 / 1; }
 .zoomer.smooth { transition: transform .2s ease-out; }
 
 /* 傾斜視角：整本書當成一張平面往後倒，只是一個 CSS transform，不會卡 */
-.view { transition: transform .5s ease; }
 .view.tilted {
-  transform: translateY(calc(var(--ph) * -.04)) perspective(calc(var(--ph) * 2.2)) rotateX(25deg);
+  /* --pw/--ph 在傾斜時是兩倍大小，最後的 scale(.5) 把它縮回原尺寸 */
+  transform: translateY(calc(var(--ph) * -.02)) perspective(calc(var(--ph) * 1.1)) rotateX(25deg) scale(.5);
 }
 
 .book {
@@ -87,7 +90,7 @@ body {
   background: var(--paper);
   overflow: hidden;
 }
-.page .sheet { box-shadow: 0 12px 28px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .25); }
+.page .sheet { box-shadow: 0 calc(12px * var(--s)) calc(28px * var(--s)) rgba(0, 0, 0, .35), 0 calc(2px * var(--s)) calc(6px * var(--s)) rgba(0, 0, 0, .25); }
 
 .content { position: absolute; inset: 0; }
 .content img {
@@ -241,7 +244,8 @@ body {
   .topbar { gap: 10px; padding-top: 8px; min-height: 0; }
   .titles { flex-direction: column; align-items: flex-start; gap: 2px; }
   .topbar h1, .topbar .author { max-width: 100%; white-space: normal; }
-  .credit { font-size: 11px; }
+  .credit { font-size: 11px; line-height: 1.4; text-align: right; padding-top: 2px; }
+  .credit .handle { display: block; }  /* 手機上署名分兩行，讓作者名稱有空間 */
   .zoom-group { display: none; }  /* 手機用兩指縮放，工具列放不下 */
 }
 
