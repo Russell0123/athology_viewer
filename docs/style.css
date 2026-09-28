@@ -22,7 +22,7 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;   /* 不讓瀏覽器整頁縮放 */
+  touch-action: none;   /* 整頁不交給瀏覽器處理手勢（不捲動、不縮放），減少觸控被 App 內建瀏覽器搶走 */
 }
 [hidden] { display: none !important; }
 
@@ -238,7 +238,8 @@ body {
 
 @media (max-width: 600px) {
   .btn .txt { display: none; }
-  .btn { padding: 0 8px; }
+  .btn { padding: 0 8px; height: 48px; min-width: 44px; }   /* 手機上按鈕做大一點，比較好按 */
+  .toolbar { padding-top: 4px; padding-bottom: calc(4px + env(safe-area-inset-bottom)); }
   .sep { margin: 0 2px; }
   /* 手機：作品名和作者分成兩行 */
   .topbar { gap: 10px; padding-top: 8px; min-height: 0; }

@@ -294,13 +294,25 @@ addEventListener('resize', () => {
 });
 
 /* ---------- 輸入 ---------- */
-btnNext.onclick = next;
-btnPrev.onclick = prev;
-btnClose.onclick = toggleClose;
-btnTilt.onclick = () => { tilt = !tilt; resetZoom(); layout(); updateUI(); };
-$('#btnZoomIn').onclick = () => zoomCenter(1.25);
-$('#btnZoomOut').onclick = () => zoomCenter(1 / 1.25);
-$('#btnZoomReset').onclick = () => resetZoom(true);
+/* 按鈕：手指一碰到就觸發，不等放開。
+ * Threads／Instagram 等 App 內建瀏覽器有「往下拉關閉」的手勢，手指稍微一動 App 就會把觸控搶走，
+ * 網頁收不到「放開」，一般的 click 就不會發生；在按下的當下觸發就不會被搶。 */
+function onPress(btn, fn) {
+  let pressed = 0;
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' || btn.disabled) return;
+    pressed = Date.now();
+    fn();
+  });
+  btn.addEventListener('click', () => { if (Date.now() - pressed > 800) fn(); });  // 滑鼠、鍵盤
+}
+onPress(btnNext, next);
+onPress(btnPrev, prev);
+onPress(btnClose, toggleClose);
+onPress(btnTilt, () => { tilt = !tilt; resetZoom(); layout(); updateUI(); });
+onPress($('#btnZoomIn'), () => zoomCenter(1.25));
+onPress($('#btnZoomOut'), () => zoomCenter(1 / 1.25));
+onPress($('#btnZoomReset'), () => resetZoom(true));
 if (document.fullscreenEnabled) {
   btnFull.onclick = () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
 } else {
@@ -336,9 +348,12 @@ function tap(clientX) {
 
 // 左右滑動：往右滑 = 下一頁、往左滑 = 上一頁（右翻書）
 function swipe(dx, dy) {
-  if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+  if (Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy)) return;
   dx > 0 ? next() : prev();
 }
+const TAP_SLOP = 24;    // 手指移動多少以內仍算「點一下」（px）
+const SWIPE_MIN = 30;   // 左右滑多少以上算翻頁（px）
+const TAP_TIME = 600;   // 被 App 搶走觸控時，多快以內仍當作點擊（ms）
 
 /* 手指：
  *   單指點擊／左右滑動 → 翻頁（放大時也一樣）
@@ -359,7 +374,8 @@ stage.addEventListener('pointerdown', (e) => {
   const p = { x: e.clientX, y: e.clientY };
   ptrs.set(e.pointerId, p);
   if (ptrs.size === 1) {
-    gesture = { type: 'one', mouse: e.pointerType === 'mouse', x0: p.x, y0: p.y, zx: zoom.x, zy: zoom.y, moved: false };
+    gesture = { type: 'one', mouse: e.pointerType === 'mouse', x0: p.x, y0: p.y, x: p.x, y: p.y,
+      t0: Date.now(), zx: zoom.x, zy: zoom.y, moved: false };
   } else if (ptrs.size === 2) {
     const [a, b] = [...ptrs.values()];
     const m = mid(a, b);
@@ -370,8 +386,9 @@ stage.addEventListener('pointermove', (e) => {
   if (!ptrs.has(e.pointerId) || !gesture) return;
   ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
   if (gesture.type === 'one') {
+    gesture.x = e.clientX; gesture.y = e.clientY;
     const dx = e.clientX - gesture.x0, dy = e.clientY - gesture.y0;
-    if (Math.hypot(dx, dy) > 10) gesture.moved = true;
+    if (Math.hypot(dx, dy) > TAP_SLOP) gesture.moved = true;
     if (gesture.mouse && zoom.z > 1 && gesture.moved) {
       stage.classList.add('panning');
       setZoom(zoom.z, gesture.zx + dx, gesture.zy + dy);
@@ -398,9 +415,18 @@ function endPointer(e) {
   if (ptrs.size > 0) return;
   const g = gesture;
   gesture = null;
-  if (g.type !== 'one' || e.type !== 'pointerup') return;
-  const dx = e.clientX - g.x0, dy = e.clientY - g.y0;
-  if (!g.moved) tap(e.clientX);
+  if (g.type !== 'one') return;
+  if (e.type === 'pointerup') { g.x = e.clientX; g.y = e.clientY; }
+  const dx = g.x - g.x0, dy = g.y - g.y0;
+  if (e.type !== 'pointerup') {
+    // 觸控被 App（例如 Threads 的下拉關閉手勢）搶走了：收不到放開，
+    // 就用目前為止的動作判斷——很短的輕觸當作點擊、明顯的左右滑當作翻頁，往下拉則不理會
+    if (e.type !== 'pointercancel') return;
+    if (Math.hypot(dx, dy) <= TAP_SLOP && Date.now() - g.t0 < TAP_TIME) tap(g.x0);
+    else swipe(dx, dy);
+    return;
+  }
+  if (!g.moved) tap(g.x0);
   else if (!(g.mouse && zoom.z > 1)) swipe(dx, dy);
 }
 // 手指可能在閱讀區外放開（例如滑到工具列上），所以在整個視窗上監聽
@@ -409,6 +435,10 @@ addEventListener('pointercancel', endPointer);
 stage.addEventListener('lostpointercapture', (e) => { if (ptrs.has(e.pointerId)) endPointer(e); });
 // 保險：所有手指都離開螢幕時，一定把狀態清乾淨
 function clearTouches(e) {
+  // 有些 App 內建瀏覽器只送 touchcancel、不送 pointercancel：一樣當作被搶走處理
+  if (e.type === 'touchcancel' && gesture && gesture.type === 'one' && ptrs.size === 1) {
+    endPointer({ type: 'pointercancel', pointerId: [...ptrs.keys()][0] });
+  }
   if (e.touches.length === 0 && [...ptrs.keys()].length) {
     ptrs.clear();
     gesture = null;
@@ -419,6 +449,10 @@ addEventListener('touchend', clearTouches);
 addEventListener('touchcancel', clearTouches);
 // iPhone Safari：關掉瀏覽器自己的整頁縮放，避免和書本縮放打架
 document.addEventListener('gesturestart', (e) => e.preventDefault());
+// 整頁都不會捲動：告訴瀏覽器手指移動由網頁自己處理，減少 App 內建瀏覽器把觸控搶走（拉動頁數滑桿除外）
+document.addEventListener('touchmove', (e) => {
+  if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+}, { passive: false });
 
 // 滑鼠滾輪／觸控板
 let wheelAcc = 0, wheelLock = 0, wheelReset = 0;
